@@ -88,7 +88,7 @@ module UniteIdeas
         when "select"         then do_select(model, msg)
         when "toggle_expand"  then do_toggle_expand(model, msg)
         when "rename"         then guarded(model) { Actions.rename(model, ent(msg["id"]), msg["name"]) }; build_and_push
-        when "set_setting"    then set_setting(msg["key"], msg["value"]); build_and_push
+        when "set_setting"    then set_setting(msg["key"], msg["value"]); build_and_push unless cosmetic?(msg["key"])
         when "search"         then @query = msg["query"]; @filters = msg["filters"] || {}; build_and_push
         when "action"         then do_action(model, msg)
         when "batch_rename"   then do_batch_rename(model, msg)
@@ -281,6 +281,11 @@ module UniteIdeas
       def set_setting(key, value)
         return unless Settings::DEFAULTS.key?(key)
         Settings.set(key, value)
+      end
+
+      # Cosmetic keys change only CSS in the panel; no tree rebuild needed.
+      def cosmetic?(key)
+        key == "ui_font"
       end
 
       def push_tags(model)

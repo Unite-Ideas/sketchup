@@ -14,6 +14,7 @@ module UniteIdeas
         "color_scheme"  => "by_tag",   # by_tag | by_type | by_state | none | custom
         "show_all"      => false,      # include loose geometry / dims / etc.
         "sort"          => "model",    # model | name | type | count
+        "ui_font"       => "nexa",     # nexa | nexabook | source | system (cosmetic)
         "win_w"         => 340,
         "win_h"         => 600,
       }.freeze

@@ -46,6 +46,7 @@
     schemeEdit: document.getElementById("scheme-edit"),
     sort: document.getElementById("sort"),
     showall: document.getElementById("showall"),
+    uifont: document.getElementById("uifont"),
     ctx: document.getElementById("ctxmenu"),
     // rules modal
     rulesModal: document.getElementById("rules-modal"),
@@ -110,6 +111,19 @@
     if (state.settings.color_scheme) el.scheme.value = state.settings.color_scheme;
     if (state.settings.sort) el.sort.value = state.settings.sort;
     el.showall.checked = truthy(state.settings.show_all);
+    applyFont(state.settings.ui_font || "nexa");
+  }
+
+  var FONT_STACKS = {
+    nexa: '"NexaUI", "Source Sans 3", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    nexabook: '"NexaBookUI", "Source Sans 3", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    source: '"Source Sans 3", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    system: '-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+  };
+  function applyFont(val) {
+    var stack = FONT_STACKS[val] || FONT_STACKS.nexa;
+    document.documentElement.style.setProperty("--ui-font", stack);
+    if (el.uifont.value !== val) el.uifont.value = val;
   }
 
   // ---- flatten + virtualized render --------------------------------------
@@ -528,6 +542,10 @@
   });
   el.showall.addEventListener("change", function () {
     send("set_setting", { key: "show_all", value: el.showall.checked });
+  });
+  el.uifont.addEventListener("change", function () {
+    applyFont(el.uifont.value);                 // instant, no rebuild
+    send("set_setting", { key: "ui_font", value: el.uifont.value });
   });
 
   // rules modal events
