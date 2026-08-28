@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Outliner Reforged</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div id="toolbar">
+    <div class="search-row">
+      <input id="search" type="search" placeholder="Search names…" autocomplete="off" spellcheck="false">
+      <button id="filter-btn" title="Filters" aria-label="Filters">⌄</button>
+    </div>
+
+    <div id="filters" class="filters hidden">
+      <label>Type
+        <select id="f-type">
+          <option value="any">Any</option>
+          <option value="group">Group</option>
+          <option value="component">Component</option>
+          <option value="image">Image</option>
+          <option value="section">Section</option>
+          <option value="dimension">Dimension</option>
+          <option value="text">Text</option>
+          <option value="guide">Guide</option>
+        </select>
+      </label>
+      <label>Tag
+        <select id="f-tag"><option value="any">Any</option></select>
+      </label>
+      <label class="chk"><input type="checkbox" id="f-locked"> Locked</label>
+      <label class="chk"><input type="checkbox" id="f-hidden"> Hidden</label>
+      <label class="chk"><input type="checkbox" id="f-nomat"> No material</label>
+    </div>
+
+    <div class="opts-row">
+      <label class="opt">Color
+        <select id="scheme"></select>
+      </label>
+      <label class="opt">Sort
+        <select id="sort">
+          <option value="model">Model</option>
+          <option value="name">Name</option>
+          <option value="type">Type</option>
+          <option value="count">Count</option>
+        </select>
+      </label>
+      <label class="opt chk"><input type="checkbox" id="showall"> Show all</label>
+    </div>
+  </div>
+
+  <div id="tree" tabindex="0" role="tree" aria-label="Model outline"></div>
+  <div id="empty" class="empty hidden">Nothing to show.</div>
+
+  <ul id="ctxmenu" class="ctxmenu hidden" role="menu"></ul>
+
+  <script src="panel.js"></script>
+</body>
+</html>
