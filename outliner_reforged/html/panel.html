@@ -38,6 +38,7 @@
       <label class="opt">Color
         <select id="scheme"></select>
       </label>
+      <button id="scheme-edit" class="mini-btn" title="Edit color rules">✎</button>
       <label class="opt">Sort
         <select id="sort">
           <option value="model">Model</option>
@@ -52,8 +53,50 @@
 
   <div id="tree" tabindex="0" role="tree" aria-label="Model outline"></div>
   <div id="empty" class="empty hidden">Nothing to show.</div>
+  <div id="statusbar"></div>
 
   <ul id="ctxmenu" class="ctxmenu hidden" role="menu"></ul>
+
+  <!-- Color-rule editor -->
+  <div id="rules-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <span>Color Rules</span>
+        <button class="x" id="rules-close" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="rules-list"></div>
+        <button id="rules-add" class="btn">+ Add rule</button>
+      </div>
+      <div class="modal-foot">
+        <span class="hint">First match wins. Unmatched rows keep the default color.</span>
+        <button id="rules-save" class="btn primary">Save &amp; apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Batch rename -->
+  <div id="batch-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <span id="batch-title">Batch Rename</span>
+        <button class="x" id="batch-close" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <label class="field">Pattern
+          <input id="batch-pattern" value="Part #" spellcheck="false">
+        </label>
+        <label class="field">Start number
+          <input id="batch-start" type="number" value="1" min="0">
+        </label>
+        <div class="hint">Use <code>#</code> where the incrementing number should go.</div>
+      </div>
+      <div class="modal-foot">
+        <span class="hint" id="batch-preview"></span>
+        <button id="batch-apply" class="btn primary">Rename</button>
+      </div>
+    </div>
+  </div>
 
   <script src="panel.js"></script>
 </body>

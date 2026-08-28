@@ -55,6 +55,20 @@ module UniteIdeas
         model.commit_operation
       end
 
+      # Rename many entities at once. "#" in the pattern is replaced by an
+      # incrementing counter starting at `start` (e.g. "Part #" -> Part 1,
+      # Part 2, ...). A pattern with no "#" names every item identically.
+      def batch_rename(model, entities, pattern, start)
+        model.start_operation("Batch Rename", true)
+        n = start
+        entities.each do |e|
+          next unless e.respond_to?(:name=)
+          e.name = pattern.gsub("#", n.to_s)
+          n += 1
+        end
+        model.commit_operation
+      end
+
       def make_unique(model, entity)
         return unless entity && entity.respond_to?(:make_unique)
         model.start_operation("Make Unique", true)

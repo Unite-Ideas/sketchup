@@ -1,15 +1,23 @@
 /* Outliner Reforged - panel logic
  * Talks to Ruby via sketchup.msg(JSON). Ruby pushes state back through the
- * global OR object below. */
+ * global OR object below. The tree is virtualized: the model tree is flattened
+ * to a list of visible rows and only the rows inside the viewport are in the
+ * DOM, so a model with tens of thousands of entities stays smooth. */
 (function () {
   "use strict";
 
+  var ROW_H = 24;   // must match --row-h in panel.css
+  var BUFFER = 8;   // extra rows rendered above/below the viewport
+
   var state = {
     nodes: [],
+    flat: [],            // [{node, depth}]
+    indexById: {},       // pid -> flat index
     selected: {},        // pid -> true
     schemes: [],
     settings: {},
-    filtersOpen: false
+    filtersOpen: false,
+    editing: false       // a rename input is open; pause slice rebuilds
   };
 
   // ---- bridge -------------------------------------------------------------
@@ -25,6 +33,7 @@
   var el = {
     tree: document.getElementById("tree"),
     empty: document.getElementById("empty"),
+    status: document.getElementById("statusbar"),
     search: document.getElementById("search"),
     filterBtn: document.getElementById("filter-btn"),
     filters: document.getElementById("filters"),
@@ -34,22 +43,45 @@
     fHidden: document.getElementById("f-hidden"),
     fNoMat: document.getElementById("f-nomat"),
     scheme: document.getElementById("scheme"),
+    schemeEdit: document.getElementById("scheme-edit"),
     sort: document.getElementById("sort"),
     showall: document.getElementById("showall"),
-    ctx: document.getElementById("ctxmenu")
+    ctx: document.getElementById("ctxmenu"),
+    // rules modal
+    rulesModal: document.getElementById("rules-modal"),
+    rulesList: document.getElementById("rules-list"),
+    rulesAdd: document.getElementById("rules-add"),
+    rulesSave: document.getElementById("rules-save"),
+    rulesClose: document.getElementById("rules-close"),
+    // batch modal
+    batchModal: document.getElementById("batch-modal"),
+    batchTitle: document.getElementById("batch-title"),
+    batchPattern: document.getElementById("batch-pattern"),
+    batchStart: document.getElementById("batch-start"),
+    batchPreview: document.getElementById("batch-preview"),
+    batchApply: document.getElementById("batch-apply"),
+    batchClose: document.getElementById("batch-close")
   };
+
+  // the absolutely-positioned scroll canvas
+  var canvas = document.createElement("div");
+  canvas.id = "tree-canvas";
+  el.tree.appendChild(canvas);
 
   // ---- inbound API (called by Ruby) --------------------------------------
   window.OR = {
     render: function (nodes) {
       state.nodes = nodes || [];
+      buildFlat();
       renderTree();
+      updateStatus();
     },
     setSelection: function (pids) {
       state.selected = {};
       (pids || []).forEach(function (p) { if (p) state.selected[p] = true; });
-      paintSelection();
+      renderSlice();
       scrollToFirstSelected();
+      updateStatus();
     },
     setSettings: function (s) {
       state.settings = s || {};
@@ -69,7 +101,6 @@
   };
 
   function applySettings() {
-    // color scheme dropdown
     el.scheme.innerHTML = "";
     state.schemes.forEach(function (s) {
       var o = document.createElement("option");
@@ -81,23 +112,58 @@
     el.showall.checked = truthy(state.settings.show_all);
   }
 
-  // ---- rendering ----------------------------------------------------------
-  function renderTree() {
-    var frag = document.createDocumentFragment();
-    state.nodes.forEach(function (n) { renderNode(n, 0, frag); });
-    el.tree.innerHTML = "";
-    el.tree.appendChild(frag);
-    el.empty.classList.toggle("hidden", state.nodes.length > 0);
-    paintSelection();
+  // ---- flatten + virtualized render --------------------------------------
+  function buildFlat() {
+    state.flat = [];
+    state.indexById = {};
+    (function walk(nodes, depth) {
+      nodes.forEach(function (n) {
+        state.indexById[n.id] = state.flat.length;
+        state.flat.push({ node: n, depth: depth });
+        if (n.children && n.children.length) walk(n.children, depth + 1);
+      });
+    })(state.nodes, 0);
   }
 
-  function renderNode(node, depth, parent) {
+  function renderTree() {
+    canvas.style.height = (state.flat.length * ROW_H) + "px";
+    el.empty.classList.toggle("hidden", state.flat.length > 0);
+    renderSlice();
+  }
+
+  var sliceQueued = false;
+  function scheduleSlice() {
+    if (sliceQueued) return;
+    sliceQueued = true;
+    requestAnimationFrame(function () { sliceQueued = false; renderSlice(); });
+  }
+
+  function renderSlice() {
+    if (state.editing) return; // don't yank the row out from under an editor
+    var scrollTop = el.tree.scrollTop;
+    var vh = el.tree.clientHeight || 400;
+    var start = Math.max(0, Math.floor(scrollTop / ROW_H) - BUFFER);
+    var end = Math.min(state.flat.length, Math.ceil((scrollTop + vh) / ROW_H) + BUFFER);
+
+    var frag = document.createDocumentFragment();
+    for (var i = start; i < end; i++) {
+      var item = state.flat[i];
+      frag.appendChild(buildRow(item.node, item.depth, i));
+    }
+    canvas.innerHTML = "";
+    canvas.appendChild(frag);
+  }
+
+  function buildRow(node, depth, index) {
     var row = document.createElement("div");
     row.className = "row";
     row.dataset.id = node.id;
     row.dataset.type = node.type;
+    row.style.top = (index * ROW_H) + "px";
+    row.style.height = ROW_H + "px";
     row.style.paddingLeft = (6 + depth * 14) + "px";
     if (node.hidden) row.classList.add("dim");
+    if (state.selected[node.id]) row.classList.add("selected");
 
     // caret
     var caret = document.createElement("span");
@@ -110,7 +176,6 @@
       });
     } else {
       caret.className = "caret spacer";
-      caret.textContent = "";
     }
     row.appendChild(caret);
 
@@ -142,7 +207,6 @@
       row.appendChild(chip);
     }
 
-    // interactions
     if (node.selectable !== false) {
       row.addEventListener("click", function (e) {
         send("select", { id: node.id, add: e.ctrlKey || e.metaKey || e.shiftKey });
@@ -157,9 +221,7 @@
         openContextMenu(e.clientX, e.clientY, node);
       });
     }
-
-    parent.appendChild(row);
-    if (node.children) node.children.forEach(function (c) { renderNode(c, depth + 1, parent); });
+    return row;
   }
 
   function badgeEl(b) {
@@ -174,8 +236,8 @@
 
   function glyphFor(type) {
     switch (type) {
-      case "group": return "\u25A2";       // dotted square
-      case "component": return "\u25C8";   // diamond in square
+      case "group": return "\u25A2";
+      case "component": return "\u25C8";
       case "image": return "\u25A6";
       case "section": return "\u25F0";
       case "geometry": return "\u2500";
@@ -185,20 +247,33 @@
     }
   }
 
-  function paintSelection() {
-    var rows = el.tree.querySelectorAll(".row");
-    rows.forEach(function (r) {
-      r.classList.toggle("selected", !!state.selected[r.dataset.id]);
-    });
+  function scrollToFirstSelected() {
+    var idx = -1;
+    for (var id in state.selected) {
+      if (state.indexById[id] !== undefined) {
+        idx = (idx === -1) ? state.indexById[id] : Math.min(idx, state.indexById[id]);
+      }
+    }
+    if (idx === -1) return;
+    var top = idx * ROW_H;
+    var vh = el.tree.clientHeight;
+    if (top < el.tree.scrollTop || top + ROW_H > el.tree.scrollTop + vh) {
+      el.tree.scrollTop = Math.max(0, top - vh / 3);
+    }
+    renderSlice();
   }
 
-  function scrollToFirstSelected() {
-    var first = el.tree.querySelector(".row.selected");
-    if (first && first.scrollIntoView) first.scrollIntoView({ block: "nearest" });
+  function updateStatus() {
+    var n = state.flat.length;
+    var sel = Object.keys(state.selected).length;
+    var msg = n + (n === 1 ? " row" : " rows");
+    if (sel > 0) msg += " · " + sel + " selected";
+    el.status.textContent = msg;
   }
 
   // ---- rename -------------------------------------------------------------
   function startRename(row, nameEl, node) {
+    state.editing = true;
     nameEl.classList.add("editing");
     var input = document.createElement("input");
     input.className = "rename-input";
@@ -210,6 +285,7 @@
     var done = false;
     function commit(save) {
       if (done) return; done = true;
+      state.editing = false;
       if (save && input.value.trim() !== "" && input.value !== node.name) {
         send("rename", { id: node.id, name: input.value.trim() });
       } else {
@@ -228,8 +304,14 @@
   // ---- context menu -------------------------------------------------------
   function openContextMenu(x, y, node) {
     var isContainer = node.type === "group" || node.type === "component";
+    var selIds = Object.keys(state.selected);
+    var multi = selIds.length > 1;
     var items = [];
 
+    if (multi) {
+      items.push({ label: "Rename " + selIds.length + " selected…", act: "__batch" });
+      items.push({ sep: true });
+    }
     if (isContainer) {
       items.push({ label: "Move to Top Level", act: "move_to_top", cls: "headline" });
       items.push({ label: "Move Up One Level", act: "move_up" });
@@ -242,9 +324,7 @@
     }
     items.push({ label: "Show All (unhide)", act: "show_all" });
     items.push({ sep: true });
-    if (isContainer) {
-      items.push({ label: "Rename…", act: "__rename" });
-    }
+    if (isContainer && !multi) items.push({ label: "Rename…", act: "__rename" });
     items.push({ label: node.hidden ? "Unhide" : "Hide", act: "toggle_visible" });
     items.push({ label: node.locked ? "Unlock" : "Lock", act: "toggle_lock" });
     if (isContainer) {
@@ -265,8 +345,10 @@
       li.addEventListener("click", function () {
         closeContextMenu();
         if (it.act === "__rename") {
-          var row = el.tree.querySelector('.row[data-id="' + cssEsc(node.id) + '"]');
+          var row = canvas.querySelector('.row[data-id="' + cssEsc(node.id) + '"]');
           if (row) startRename(row, row.querySelector(".name"), node);
+        } else if (it.act === "__batch") {
+          openBatchModal(selIds);
         } else {
           send("action", { name: it.act, id: node.id });
         }
@@ -275,7 +357,6 @@
     });
 
     ul.classList.remove("hidden");
-    // keep on screen
     var w = ul.offsetWidth, h = ul.offsetHeight;
     if (x + w > window.innerWidth) x = window.innerWidth - w - 4;
     if (y + h > window.innerHeight) y = window.innerHeight - h - 4;
@@ -285,14 +366,127 @@
 
   function closeContextMenu() { el.ctx.classList.add("hidden"); }
 
-  document.addEventListener("click", function (e) {
-    if (!el.ctx.contains(e.target)) closeContextMenu();
-  });
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") closeContextMenu();
-  });
-  window.addEventListener("blur", closeContextMenu);
-  el.tree.addEventListener("scroll", closeContextMenu);
+  // ---- color-rule editor --------------------------------------------------
+  var FIELDS = [
+    { id: "tag", label: "Tag", kind: "text" },
+    { id: "type", label: "Type", kind: "type" },
+    { id: "locked", label: "Locked", kind: "bool" },
+    { id: "hidden", label: "Hidden", kind: "bool" },
+    { id: "unique", label: "Unique", kind: "bool" },
+    { id: "material", label: "Has material", kind: "bool" },
+    { id: "dynamic", label: "Dynamic", kind: "bool" }
+  ];
+  var TYPES = ["group", "component", "image", "section", "dimension", "text", "guide"];
+
+  function openRulesModal() {
+    renderRules(state.settings.rules || []);
+    el.rulesModal.classList.remove("hidden");
+  }
+  function closeRulesModal() { el.rulesModal.classList.add("hidden"); }
+
+  function renderRules(rules) {
+    el.rulesList.innerHTML = "";
+    if (!rules.length) {
+      var em = document.createElement("div");
+      em.className = "rules-empty";
+      em.textContent = "No rules yet. Add one below.";
+      el.rulesList.appendChild(em);
+    }
+    rules.forEach(function (r) { el.rulesList.appendChild(ruleRow(r)); });
+  }
+
+  function ruleRow(rule) {
+    var row = document.createElement("div");
+    row.className = "rule-row";
+
+    var fsel = document.createElement("select");
+    FIELDS.forEach(function (f) {
+      var o = document.createElement("option");
+      o.value = f.id; o.textContent = f.label;
+      fsel.appendChild(o);
+    });
+    fsel.value = rule.field || "tag";
+
+    var opsel = document.createElement("select");
+    var valWrap = document.createElement("span");
+    var color = document.createElement("input");
+    color.type = "color";
+    color.value = /^#[0-9a-fA-F]{6}$/.test(rule.color || "") ? rule.color : "#3355e6";
+
+    function rebuildOps() {
+      var f = FIELDS.find(function (x) { return x.id === fsel.value; });
+      opsel.innerHTML = "";
+      var ops = (f.kind === "bool")
+        ? [["is", "is"], ["isnot", "is not"]]
+        : [["eq", "="], ["neq", "≠"]];
+      ops.forEach(function (p) {
+        var o = document.createElement("option");
+        o.value = p[0]; o.textContent = p[1];
+        opsel.appendChild(o);
+      });
+      if (rule.op) opsel.value = rule.op;
+      valWrap.innerHTML = "";
+      if (f.kind === "text") {
+        var inp = document.createElement("input");
+        inp.type = "text"; inp.placeholder = "value"; inp.value = rule.value || "";
+        inp.dataset.role = "val";
+        valWrap.appendChild(inp);
+      } else if (f.kind === "type") {
+        var sel = document.createElement("select");
+        TYPES.forEach(function (t) {
+          var o = document.createElement("option");
+          o.value = t; o.textContent = t;
+          sel.appendChild(o);
+        });
+        sel.value = rule.value || "group";
+        sel.dataset.role = "val";
+        valWrap.appendChild(sel);
+      } // bool: no value field
+    }
+    fsel.addEventListener("change", rebuildOps);
+    rebuildOps();
+
+    var del = document.createElement("button");
+    del.className = "del"; del.textContent = "×"; del.title = "Remove";
+    del.addEventListener("click", function () { row.remove(); if (!el.rulesList.children.length) renderRules([]); });
+
+    row.appendChild(fsel);
+    row.appendChild(opsel);
+    row.appendChild(valWrap);
+    row.appendChild(color);
+    row.appendChild(del);
+    return row;
+  }
+
+  function collectRules() {
+    var out = [];
+    el.rulesList.querySelectorAll(".rule-row").forEach(function (row) {
+      var sels = row.querySelectorAll("select");
+      var field = sels[0].value;
+      var op = sels[1].value;
+      var valEl = row.querySelector('[data-role="val"]');
+      var color = row.querySelector('input[type="color"]').value;
+      out.push({ field: field, op: op, value: valEl ? valEl.value : "", color: color });
+    });
+    return out;
+  }
+
+  // ---- batch rename -------------------------------------------------------
+  var batchIds = [];
+  function openBatchModal(ids) {
+    batchIds = ids.slice();
+    el.batchTitle.textContent = "Batch Rename (" + ids.length + ")";
+    updateBatchPreview();
+    el.batchModal.classList.remove("hidden");
+    el.batchPattern.focus();
+    el.batchPattern.select();
+  }
+  function closeBatchModal() { el.batchModal.classList.add("hidden"); }
+  function updateBatchPreview() {
+    var pat = el.batchPattern.value || "";
+    var start = parseInt(el.batchStart.value, 10) || 0;
+    el.batchPreview.textContent = "e.g. " + pat.replace(/#/g, String(start));
+  }
 
   // ---- toolbar wiring -----------------------------------------------------
   var searchTimer;
@@ -322,8 +516,9 @@
     el.filters.classList.toggle("hidden", !state.filtersOpen);
     if (state.filtersOpen) send("get_tags", {});
   });
-  [el.fType, el.fTag].forEach(function (n) { n.addEventListener("change", pushSearch); });
-  [el.fLocked, el.fHidden, el.fNoMat].forEach(function (n) { n.addEventListener("change", pushSearch); });
+  [el.fType, el.fTag, el.fLocked, el.fHidden, el.fNoMat].forEach(function (n) {
+    n.addEventListener("change", pushSearch);
+  });
 
   el.scheme.addEventListener("change", function () {
     send("set_setting", { key: "color_scheme", value: el.scheme.value });
@@ -333,6 +528,50 @@
   });
   el.showall.addEventListener("change", function () {
     send("set_setting", { key: "show_all", value: el.showall.checked });
+  });
+
+  // rules modal events
+  el.schemeEdit.addEventListener("click", openRulesModal);
+  el.rulesClose.addEventListener("click", closeRulesModal);
+  el.rulesAdd.addEventListener("click", function () {
+    if (el.rulesList.querySelector(".rules-empty")) el.rulesList.innerHTML = "";
+    el.rulesList.appendChild(ruleRow({}));
+  });
+  el.rulesSave.addEventListener("click", function () {
+    var rules = collectRules();
+    state.settings.rules = rules;
+    send("set_rules", { rules: rules });
+    el.scheme.value = "custom";
+    send("set_setting", { key: "color_scheme", value: "custom" });
+    closeRulesModal();
+  });
+
+  // batch modal events
+  el.batchClose.addEventListener("click", closeBatchModal);
+  el.batchPattern.addEventListener("input", updateBatchPreview);
+  el.batchStart.addEventListener("input", updateBatchPreview);
+  el.batchApply.addEventListener("click", function () {
+    send("batch_rename", {
+      ids: batchIds,
+      pattern: el.batchPattern.value,
+      start: parseInt(el.batchStart.value, 10) || 0
+    });
+    closeBatchModal();
+  });
+
+  // global handlers
+  el.tree.addEventListener("scroll", function () { closeContextMenu(); scheduleSlice(); });
+  window.addEventListener("resize", scheduleSlice);
+  document.addEventListener("click", function (e) {
+    if (!el.ctx.contains(e.target)) closeContextMenu();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { closeContextMenu(); closeRulesModal(); closeBatchModal(); }
+  });
+  window.addEventListener("blur", closeContextMenu);
+  // clicking a modal backdrop closes it
+  [el.rulesModal, el.batchModal].forEach(function (m) {
+    m.addEventListener("click", function (e) { if (e.target === m) m.classList.add("hidden"); });
   });
 
   // ---- helpers ------------------------------------------------------------

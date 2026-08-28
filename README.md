@@ -72,9 +72,11 @@ when matched paths are walked and revealed.
   only the wrapper type changes. Components move as components.
 - **The panel floats.** `HtmlDialog` can't dock into the tray beside the
   native panels — a limitation of the SketchUp API, not this extension.
-- **Large models.** v1 re-renders on change (debounced) and loads children
-  lazily. Row virtualization and diff-based updates are the next phase for
-  models in the tens of thousands of entities.
+- **Large models.** The tree is virtualized (only on-screen rows are in the
+  DOM) and children load lazily, so scrolling stays smooth at scale. The one
+  remaining cost is that a model change triggers a debounced *full* rebuild
+  rather than a targeted diff — fine for typical edits, and the next perf
+  item on the roadmap.
 - **New definitions created externally** after the panel opens aren't
   observed until the next rebuild is otherwise triggered.
 
@@ -87,10 +89,13 @@ when matched paths are walked and revealed.
 - [x] Extended right-click menu
 - [x] Color coding (by tag / type / state / custom) + state badges
 - [x] Show-everything, search + filter, sorting
-- [ ] Row virtualization + diff updates (perf at 10k+ entities)
-- [ ] Custom color-rule editor UI (engine + storage already in place)
-- [ ] Toolbar icon art
-- [ ] Batch rename
+- [x] Row virtualization (perf at 10k+ entities)
+- [x] Custom color-rule editor UI
+- [x] Batch rename (multi-select, `#` counter)
+- [x] Toolbar icon (SVG)
+- [ ] Diff-based updates (currently a debounced full re-render on change)
+- [ ] Keyboard navigation (arrow keys, type-to-find)
+- [ ] Drag-and-drop reparenting
 
 ## License
 

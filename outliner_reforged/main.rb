@@ -91,6 +91,7 @@ module UniteIdeas
         when "set_setting"    then set_setting(msg["key"], msg["value"]); build_and_push
         when "search"         then @query = msg["query"]; @filters = msg["filters"] || {}; build_and_push
         when "action"         then do_action(model, msg)
+        when "batch_rename"   then do_batch_rename(model, msg)
         when "set_rules"      then Settings.set_custom_rules(msg["rules"] || []); build_and_push
         when "get_tags"       then push_tags(model)
         end
@@ -192,6 +193,16 @@ module UniteIdeas
         end
 
         build_and_push(select_after: select_after)
+      end
+
+      def do_batch_rename(model, msg)
+        ids = Array(msg["ids"])
+        ents = ids.map { |i| ent(i) }.compact.select(&:valid?)
+        return if ents.empty?
+        guarded(model) do
+          Actions.batch_rename(model, ents, msg["pattern"].to_s, (msg["start"] || 1).to_i)
+        end
+        build_and_push
       end
 
       # Move one level up: recompute the transform relative to the grandparent
@@ -389,8 +400,11 @@ module UniteIdeas
       cmd = UI::Command.new("Outliner Reforged") { controller.toggle }
       cmd.tooltip = "Outliner Reforged"
       cmd.status_bar_text = "Open the Outliner Reforged panel"
-      icon = File.join(PLUGIN_DIR, "html", "icon.png")
-      if File.exist?(icon)
+      # SketchUp 2016+ supports vector (SVG) toolbar icons; fall back to PNG.
+      svg = File.join(PLUGIN_DIR, "html", "icon.svg")
+      png = File.join(PLUGIN_DIR, "html", "icon.png")
+      icon = File.exist?(svg) ? svg : (File.exist?(png) ? png : nil)
+      if icon
         cmd.small_icon = icon
         cmd.large_icon = icon
       end
