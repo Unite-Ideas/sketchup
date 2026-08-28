@@ -63,6 +63,15 @@ don't ricochet into rebuild loops. The whole tree serializes lazily — only
 children of expanded rows are sent — except while a search/filter is active,
 when matched paths are walked and revealed.
 
+## Fonts
+
+The panel uses **Nexa** when it's installed on the machine, and falls back to
+**Source Sans 3** (bundled, OFL licensed) everywhere else. Nexa is a
+commercial font and is deliberately **not** bundled — it's referenced via CSS
+`local()` only, so nothing about a teammate's machine or Extension Warehouse
+distribution redistributes it. Source Sans 3's license travels with it in
+`outliner_reforged/html/fonts/OFL.txt`.
+
 ## Known behavior & limitations (v1)
 
 - **Group → component on move.** The Ruby API has no true "reparent," so

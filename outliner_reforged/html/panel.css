@@ -1,4 +1,21 @@
+/* ---- fonts ----
+ * Source Sans 3 is bundled (OFL) so the panel looks right on every machine,
+ * including handoff to teammates and Extension Warehouse users.
+ * Nexa is a commercial font and is NOT bundled: it's only referenced via
+ * local(), so it renders on machines where it's installed (like the author's)
+ * and gracefully falls back to Source Sans elsewhere. */
+@font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3-700.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+
+/* Nexa (local only). Weight mapping covers both the older split-family
+   packaging (each weight is its own family) and the newer unified family. */
+@font-face { font-family: "NexaUI"; src: local("Nexa Regular"), local("Nexa-Regular"), local("Nexa Book"), local("Nexa-Book"), local("Nexa"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "NexaUI"; src: local("Nexa SemiBold"), local("Nexa-SemiBold"), local("Nexa Bold"), local("Nexa-Bold"); font-weight: 600; font-style: normal; }
+@font-face { font-family: "NexaUI"; src: local("Nexa Bold"), local("Nexa-Bold"), local("Nexa XBold"), local("Nexa Heavy"), local("Nexa-Heavy"); font-weight: 700; font-style: normal; }
+
 :root {
+  --ui-font: "NexaUI", "Source Sans 3", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --bg: #f7f8fa;
   --panel: #ffffff;
   --ink: #1b1f27;
@@ -40,10 +57,12 @@ html, body {
   margin: 0; height: 100%;
   background: var(--bg);
   color: var(--ink);
-  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--ui-font);
   font-size: 13px;
   -webkit-user-select: none; user-select: none;
 }
+/* Form controls don't inherit font-family by default; make them match. */
+input, select, button, textarea { font-family: inherit; }
 body { display: flex; flex-direction: column; }
 
 /* ---- toolbar ---- */
