@@ -398,10 +398,7 @@ module UniteIdeas
     end
 
     unless file_loaded?(__FILE__)
-      menu = UI.menu("Window")
-      menu.add_item("Outliner Reforged") { controller.show }
-
-      tb = UI::Toolbar.new("Outliner Reforged")
+      # One command drives both the menu item and the toolbar button.
       cmd = UI::Command.new("Outliner Reforged") { controller.toggle }
       cmd.tooltip = "Outliner Reforged"
       cmd.status_bar_text = "Open the Outliner Reforged panel"
@@ -413,8 +410,18 @@ module UniteIdeas
         cmd.small_icon = icon
         cmd.large_icon = icon
       end
+
+      # Put it in the Extensions menu (where users look for plugins).
+      UI.menu("Extensions").add_item(cmd)
+
+      tb = UI::Toolbar.new("Outliner Reforged")
       tb.add_item(cmd)
-      tb.show
+      # Force the toolbar visible on load. get_last_state returns
+      # TB_HIDDEN after the user (or repeated reinstalls) has closed it, and a
+      # bare restore would keep it hidden -- so show it unless it was never
+      # shown, in which case restore lets SketchUp place it sensibly.
+      state = tb.get_last_state
+      state == TB_NEVER_SHOWN ? tb.restore : tb.show
 
       file_loaded(__FILE__)
     end

@@ -19,7 +19,7 @@ module UniteIdeas
         "Outliner Reforged",
         File.join(File.dirname(__FILE__), "outliner_reforged", "main")
       )
-      ex.version     = "1.0.2"
+      ex.version     = "1.0.3"
       ex.creator     = "Unite Ideas"
       ex.copyright   = "© #{Time.now.year} Unite Ideas"
       ex.description = "A better SketchUp Outliner: move-to-top-level, " \
