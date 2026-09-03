@@ -17,7 +17,8 @@
     schemes: [],
     settings: {},
     filtersOpen: false,
-    editing: false       // a rename input is open; pause slice rebuilds
+    editing: false,      // a rename input is open; pause slice rebuilds
+    dragId: null         // id of the row being dragged, or null
   };
 
   // ---- bridge -------------------------------------------------------------
@@ -175,12 +176,29 @@
     row.dataset.type = node.type;
     row.style.top = (index * ROW_H) + "px";
     row.style.height = ROW_H + "px";
-    row.style.paddingLeft = (6 + depth * 14) + "px";
     if (node.hidden) row.classList.add("dim");
     if (state.selected[node.id]) row.classList.add("selected");
 
-    // caret
+    // visibility dot (solid = shown, hollow ring = hidden) in a fixed gutter
+    if (node.selectable !== false) {
+      var vis = document.createElement("span");
+      vis.className = "visdot" + (node.hidden ? " off" : "");
+      vis.title = node.hidden ? "Hidden — click to show" : "Visible — click to hide";
+      vis.appendChild(document.createElement("i"));
+      vis.addEventListener("click", function (e) {
+        e.stopPropagation();
+        send("action", { name: "toggle_visible", id: node.id });
+      });
+      row.appendChild(vis);
+    } else {
+      var vspacer = document.createElement("span");
+      vspacer.className = "visdot spacer";
+      row.appendChild(vspacer);
+    }
+
+    // caret (indented by depth; the visibility dot stays in the fixed gutter)
     var caret = document.createElement("span");
+    caret.style.marginLeft = (depth * 14) + "px";
     if (node.expandable) {
       caret.className = "caret" + (node.expanded ? " open" : "");
       caret.textContent = "\u25B6";
@@ -235,7 +253,57 @@
         openContextMenu(e.clientX, e.clientY, node);
       });
     }
+    if (node.type === "group" || node.type === "component") setupDrag(row, node);
     return row;
+  }
+
+  // ---- drag-and-drop reparenting -----------------------------------------
+  function nodeById(id) {
+    var i = state.indexById[id];
+    return (i === undefined) ? null : state.flat[i].node;
+  }
+  // Is targetId inside sourceId's own subtree? (Can't drop a parent into a child.)
+  function isDescendant(targetId, sourceId) {
+    var src = nodeById(sourceId);
+    if (!src) return false;
+    var found = false;
+    (function dfs(n) {
+      (n.children || []).forEach(function (c) {
+        if (c.id === targetId) found = true; else dfs(c);
+      });
+    })(src);
+    return found;
+  }
+  function clearDropMarks() {
+    canvas.querySelectorAll(".drop-in").forEach(function (r) { r.classList.remove("drop-in"); });
+    el.tree.classList.remove("drop-root");
+  }
+  function setupDrag(row, node) {
+    row.draggable = true;
+    row.addEventListener("dragstart", function (e) {
+      state.dragId = node.id;
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", node.id); } catch (_) {}
+      row.classList.add("dragging");
+    });
+    row.addEventListener("dragend", function () {
+      state.dragId = null; clearDropMarks(); row.classList.remove("dragging");
+    });
+    row.addEventListener("dragover", function (e) {
+      if (!state.dragId || state.dragId === node.id) return;
+      if (isDescendant(node.id, state.dragId)) return;   // no dropping into own subtree
+      e.preventDefault(); e.dataTransfer.dropEffect = "move";
+      clearDropMarks(); row.classList.add("drop-in");
+    });
+    row.addEventListener("dragleave", function () { row.classList.remove("drop-in"); });
+    row.addEventListener("drop", function (e) {
+      e.preventDefault(); e.stopPropagation();
+      row.classList.remove("drop-in");
+      if (state.dragId && state.dragId !== node.id && !isDescendant(node.id, state.dragId)) {
+        send("reparent", { id: state.dragId, target: node.id });
+      }
+      state.dragId = null;
+    });
   }
 
   function badgeEl(b) {
@@ -579,6 +647,22 @@
 
   // global handlers
   el.tree.addEventListener("scroll", function () { closeContextMenu(); scheduleSlice(); });
+  // Drop onto empty tree space (not a row) = move to the model root.
+  el.tree.addEventListener("dragover", function (e) {
+    if (!state.dragId) return;
+    if (e.target === el.tree || e.target === canvas) {
+      e.preventDefault(); e.dataTransfer.dropEffect = "move";
+      clearDropMarks(); el.tree.classList.add("drop-root");
+    }
+  });
+  el.tree.addEventListener("drop", function (e) {
+    if (!state.dragId) return;
+    if (e.target === el.tree || e.target === canvas) {
+      e.preventDefault(); el.tree.classList.remove("drop-root");
+      send("reparent", { id: state.dragId, target: null });
+      state.dragId = null;
+    }
+  });
   window.addEventListener("resize", scheduleSlice);
   document.addEventListener("click", function (e) {
     if (!el.ctx.contains(e.target)) closeContextMenu();

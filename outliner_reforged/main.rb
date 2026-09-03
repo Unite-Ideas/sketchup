@@ -91,6 +91,7 @@ module UniteIdeas
         when "set_setting"    then set_setting(msg["key"], msg["value"]); build_and_push unless cosmetic?(msg["key"])
         when "search"         then @query = msg["query"]; @filters = msg["filters"] || {}; build_and_push
         when "action"         then do_action(model, msg)
+        when "reparent"       then do_reparent(model, msg)
         when "batch_rename"   then do_batch_rename(model, msg)
         when "set_rules"      then Settings.set_custom_rules(msg["rules"] || []); build_and_push
         when "get_tags"       then push_tags(model)
@@ -193,6 +194,45 @@ module UniteIdeas
         end
 
         build_and_push(select_after: select_after)
+      end
+
+      # Drag-and-drop reparent: move src into the target group (or the model
+      # root when target is null), preserving world position.
+      def do_reparent(model, msg)
+        src = ent(msg["id"])
+        return unless src && src.valid?
+        return unless src.is_a?(Sketchup::Group) || src.is_a?(Sketchup::ComponentInstance)
+
+        target_id = msg["target"]
+        if target_id.nil? || target_id.to_s.empty?
+          target_entities = model.entities
+          target_world    = IDENTITY
+        else
+          return if target_id.to_s == msg["id"].to_s     # onto itself
+          return if ancestor?(msg["id"], target_id)      # into its own descendant
+          t = ent(target_id)
+          return unless t && t.valid?
+          return unless t.is_a?(Sketchup::Group) || t.is_a?(Sketchup::ComponentInstance)
+          target_entities = t.is_a?(Sketchup::Group) ? t.entities : t.definition.entities
+          target_world    = world(target_id)
+        end
+
+        local = target_world.inverse * world(msg["id"])
+        new_e = guarded(model) do
+          Actions.reparent(model, src, target_entities, local, "Move In Outliner")
+        end
+        select_after = new_e.is_a?(Sketchup::Entity) ? [pid(new_e)] : nil
+        build_and_push(select_after: select_after)
+      end
+
+      # True if node_id sits somewhere below maybe_ancestor_id in the tree.
+      def ancestor?(maybe_ancestor_id, node_id)
+        cur = @builder.parent_map[node_id.to_s]
+        while cur
+          return true if cur == maybe_ancestor_id.to_s
+          cur = @builder.parent_map[cur]
+        end
+        false
       end
 
       def do_batch_rename(model, msg)

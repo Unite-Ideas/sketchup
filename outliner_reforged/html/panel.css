@@ -124,6 +124,25 @@ body { display: flex; flex-direction: column; }
 .row.selected { background: var(--sel); }
 .row.dim { opacity: 0.55; }
 
+/* visibility dot — solid = shown, hollow ring = hidden (fixed left gutter) */
+.visdot {
+  flex: 0 0 auto; width: 16px; height: var(--row-h);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.visdot.spacer { cursor: default; }
+.visdot i {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ink-soft); transition: background .1s, box-shadow .1s;
+}
+.visdot.off i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-faint); }
+.visdot:hover i { background: var(--accent); }
+.visdot.off:hover i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent); }
+
+/* drag-and-drop reparenting */
+.row.dragging { opacity: .4; }
+.row.drop-in { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+#tree.drop-root { box-shadow: inset 0 0 0 2px var(--accent); }
+
 .caret {
   flex: 0 0 auto; width: 16px; text-align: center;
   color: var(--ink-faint); cursor: pointer;

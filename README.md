@@ -102,9 +102,11 @@ distribution redistributes it. Source Sans 3's license travels with it in
 - [x] Custom color-rule editor UI
 - [x] Batch rename (multi-select, `#` counter)
 - [x] Toolbar icon (SVG)
+- [x] Drag-and-drop reparenting (drop onto a group, or empty space for root)
+- [x] Inline visibility dot (solid = shown, hollow = hidden)
 - [ ] Diff-based updates (currently a debounced full re-render on change)
 - [ ] Keyboard navigation (arrow keys, type-to-find)
-- [ ] Drag-and-drop reparenting
+- [ ] Group-preserving move (keep a group a group)
 
 ## License
 

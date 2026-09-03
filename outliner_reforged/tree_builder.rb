@@ -165,7 +165,6 @@ module UniteIdeas
       def base_node(e, pid, facts)
         badges = []
         badges << "lock"          if facts[:locked]
-        badges << "hidden"        if facts[:hidden]
         badges << "dyn"           if facts[:dynamic]
         badges << "x#{facts[:count]}" if facts[:count] && facts[:count] > 1
         {
